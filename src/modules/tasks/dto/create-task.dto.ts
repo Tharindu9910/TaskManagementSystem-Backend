@@ -10,4 +10,7 @@ export class CreateTaskDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @IsOptional()
+  completed?: boolean;
 }
