@@ -5,11 +5,31 @@ import * as argon2 from 'argon2';
 import { BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AuthRepository } from './auth.repository';
 
 @Injectable()
 export class AuthService {
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private config: ConfigService,
+    private authRepo: AuthRepository,
+  ) {}
   private users: { email: string; passwordHash: string }[] = [];
+
+  private async generateAccessToken(userId: string) {
+    return this.jwtService.signAsync({ sub: userId });
+  }
+  private async generateRefreshToken(userId: string) {
+    return this.jwtService.signAsync(
+      { sub: userId },
+      {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: '7d',
+      },
+    );
+  }
+
   async register(dto: RegisterDto) {
     const existingUser = this.users.find((user) => user.email === dto.email);
 
@@ -40,9 +60,42 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const token = await this.jwtService.signAsync({
-      email: user.email,
-    });
-    return { accessToken: token };
+    // const token = await this.jwtService.signAsync({
+    //   email: user.email,
+    // });
+
+    const accessToken = await this.generateAccessToken(user.email);
+    const refreshToken = await this.generateRefreshToken(user.email);
+
+    // store refresh token (in memory DB)
+    this.authRepo.setRefreshToken(user.email, refreshToken);
+
+    return { accessToken: accessToken, refreshToken: refreshToken };
+  }
+
+  async refreshToken(token: string) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      const savedToken = this.authRepo.getRefreshToken(payload.sub);
+
+      if (!savedToken || savedToken !== token) {
+        throw new Error('Invalid refresh token');
+      }
+
+      const newAccessToken = await this.generateAccessToken(payload.sub);
+
+      return { accessToken: newAccessToken };
+    } catch {
+      throw new Error('Invalid refresh token');
+    }
+  }
+
+  async logout(userId: string) {
+    this.authRepo.removeRefreshToken(userId);
+    return { message: 'Logged out' };
   }
 }
