@@ -10,10 +10,10 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3000);
+  const port = configService.get<number>('PORT', 8080);
   const allowedOrigins = [
     'http://localhost:3000',
-    'http://127.0.0.1:3000',
+    'https://task-management-system-frontend-oud.vercel.app',
     'https://task-management-system-frontend-pavh-bpz8grfna.vercel.app',
   ];
 
@@ -57,9 +57,6 @@ async function bootstrap() {
   );
   // 4. Start the application
   await app.listen(port);
-  Logger.log(
-    `🚀 Application is running on: http://localhost:${port}`,
-    'Bootstrap',
-  );
+  Logger.log(`🚀 Application is running`, 'Bootstrap');
 }
 bootstrap();
