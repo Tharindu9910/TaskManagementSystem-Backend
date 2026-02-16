@@ -11,6 +11,32 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://task-management-system-frontend-pavh-2wcmrinv1.vercel.app',
+  ];
+
+  app.enableCors({
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      // allow tools like Postman / curl
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  });
 
   app.setGlobalPrefix('api');
   app.use(helmet());
@@ -22,10 +48,6 @@ async function bootstrap() {
       max: 100, // limit each IP
     }),
   );
-  app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL'),
-    credentials: true,
-  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
