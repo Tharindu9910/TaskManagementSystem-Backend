@@ -14,7 +14,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    'https://task-management-system-frontend-pavh-2wcmrinv1.vercel.app',
+    'https://task-management-system-frontend-pavh-bpz8grfna.vercel.app',
   ];
 
   app.enableCors({
