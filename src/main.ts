@@ -2,9 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import helmet from 'helmet'; // Fixes helmet
-import cookieParser from 'cookie-parser'; // Fixes cookieParser
-import { rateLimit } from 'express-rate-limit'; // Fixes rateLimit
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { rateLimit } from 'express-rate-limit';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
@@ -22,7 +22,6 @@ async function bootstrap() {
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
-      // allow tools like Postman / curl
       if (!origin) {
         callback(null, true);
         return;
@@ -53,10 +52,11 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      errorHttpStatusCode: 400,
     }),
   );
   // 4. Start the application
   await app.listen(port);
-  Logger.log(`🚀 Application is running`, 'Bootstrap');
+  Logger.log(`Application is running`, 'Bootstrap');
 }
 bootstrap();

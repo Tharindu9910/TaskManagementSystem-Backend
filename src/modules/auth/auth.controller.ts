@@ -1,11 +1,20 @@
-import { BadRequestException, Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Post,
+  Req,
+  Get,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import express from 'express';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
+import type { AuthenticatedUser } from './auth.interface';
 
 @Controller('auth')
 export class AuthController {
@@ -40,6 +49,12 @@ export class AuthController {
     return { message: 'Logged in successfully' };
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getMe(@GetUser() user: AuthenticatedUser) {
+    return user;
+  }
+
   @Post('refresh')
   async refresh(
     @Req() req: express.Request,
@@ -70,10 +85,10 @@ export class AuthController {
     @GetUser() userEmail: string,
     @Res({ passthrough: true }) res: express.Response,
   ) {
-    // 1️⃣ Invalidate refresh token on server
+    //Invalidate refresh token on server
     await this.authService.logout(userEmail);
 
-    // 2️⃣ Remove cookies from browser
+    //Remove cookies from browser
     res.cookie('access_token', '', {
       httpOnly: true,
       secure: true,
@@ -90,17 +105,4 @@ export class AuthController {
 
     return { message: 'Logged out successfully' };
   }
-
-  //   @Post('logout')
-  //   async logout(@Res({ passthrough: true }) res: express.Response) {
-  //     // We overwrite the cookie with an empty string and set maxAge to 0
-  //     res.cookie('access_token', '', {
-  //       httpOnly: true,
-  //       secure: true,
-  //       sameSite: 'none',
-  //       expires: new Date(0), // Sets the expiration to Jan 1, 1970
-  //     });
-
-  //     return { message: 'Logged out successfully' };
-  //   }
 }

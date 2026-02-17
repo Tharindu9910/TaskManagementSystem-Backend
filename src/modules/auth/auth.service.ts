@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as argon2 from 'argon2';
@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthRepository } from './auth.repository';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -18,7 +19,7 @@ export class AuthService {
   private users: { email: string; passwordHash: string }[] = [];
 
   private async generateAccessToken(userId: string) {
-    return this.jwtService.signAsync({ sub: userId });
+    return this.jwtService.signAsync({ sub: userId }, { expiresIn: '15m' });
   }
   private async generateRefreshToken(userId: string) {
     return this.jwtService.signAsync(
@@ -31,7 +32,8 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const existingUser = this.users.find((user) => user.email === dto.email);
+    const email = dto.email.toLowerCase().trim();
+    const existingUser = this.authRepo.findUserByEmail(email);
 
     if (existingUser) {
       throw new BadRequestException('User already exists');
@@ -40,18 +42,18 @@ export class AuthService {
     const passwordHash = await argon2.hash(dto.password);
 
     const newUser = {
+      id: randomUUID(),
       email: dto.email,
       passwordHash,
     };
 
-    this.users.push(newUser);
+    this.authRepo.createUser(newUser);
 
     return { message: 'User registered successfully' };
   }
 
   async login(dto: LoginDto) {
-    const user = this.users.find((user) => user.email === dto.email);
-
+    const user = this.authRepo.findUserByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -60,17 +62,26 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // const token = await this.jwtService.signAsync({
-    //   email: user.email,
-    // });
-
-    const accessToken = await this.generateAccessToken(user.email);
-    const refreshToken = await this.generateRefreshToken(user.email);
+    const accessToken = await this.generateAccessToken(user.id);
+    const refreshToken = await this.generateRefreshToken(user.id);
 
     // store refresh token (in memory DB)
-    this.authRepo.setRefreshToken(user.email, refreshToken);
+    const refreshTokenHash = await argon2.hash(refreshToken);
+    this.authRepo.setRefreshToken(user.id, refreshTokenHash);
 
     return { accessToken: accessToken, refreshToken: refreshToken };
+  }
+
+  findUser(userId: string) {
+    const user = this.authRepo.findUserById(userId);
+    if (!user) {
+      throw new BadRequestException('User Not Found');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+    };
   }
 
   async refreshToken(token: string) {
@@ -80,11 +91,10 @@ export class AuthService {
         secret: this.config.get<string>('JWT_REFRESH_SECRET'),
       });
 
-      const savedToken = this.authRepo.getRefreshToken(payload.sub);
-
-      if (!savedToken || savedToken !== token) {
-        throw new Error('Invalid refresh token');
-      }
+      const storedHash = this.authRepo.getRefreshToken(payload.sub);
+      if (!storedHash) throw new UnauthorizedException();
+      const tokenMatches = await argon2.verify(storedHash, token);
+      if (!tokenMatches) throw new UnauthorizedException();
 
       const newAccessToken = await this.generateAccessToken(payload.sub);
 
